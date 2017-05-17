@@ -14,7 +14,8 @@ if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])
 	|| $_SERVER['PHP_AUTH_USER'] != UserName || $_SERVER['PHP_AUTH_PW'] != Password)
 {
 	header('WWW-Authenticate: Basic realm="'.AppName.'"');
-	exit('Нужно ввести логин и пароль');
+	header("HTTP/1.0 401 Unauthorized");
+	exit('<!DOCTYPE html><meta charset="UTF-8">Нужно ввести логин и пароль');
 }
 
 function z($text) { return htmlspecialchars($text, ENT_COMPAT, 'UTF-8'); }
@@ -29,11 +30,11 @@ else
 try
 {
 	$sql = new PDO('sqlite:'.BaseName);
-	if (!isset($_GET['q']))
+	if (!isset($_GET['q']))				//q - текст запроса
 	{
 		$OriginalRequest = $request = 'SELECT * FROM sqlite_master ORDER BY type DESC, name';
 	}
-	else	//q — основной запрос без where
+	else
 	{
 		//$request затем может модифицироваться
 		$request = $OriginalRequest = $_GET['q'];
