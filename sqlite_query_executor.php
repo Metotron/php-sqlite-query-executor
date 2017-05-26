@@ -5,7 +5,7 @@ const UserName = 'em';				//Имя для HTTP-авторизации
 const Password = 'am';				//Пароль для того же
 
 const AppName = 'SQLite manager';	//Название в поле входа и заголовке окна
-$AddRowidToSelect = true;			//По умолчанию добавлять или не добавлять поле rowid к select-запросам		
+$AddRowidToSelect = true;			//По умолчанию добавлять или не добавлять поле rowid к select-запросам
 /* ---- ********* ---- */
 
 mb_internal_encoding('UTF-8');
@@ -18,7 +18,7 @@ if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW'])
 	exit('<!DOCTYPE html><meta charset="UTF-8">Нужно ввести логин и пароль');
 }
 
-function z($text) { return htmlspecialchars($text, ENT_COMPAT, 'UTF-8'); }
+function z($text) { return htmlspecialchars($text == null ? '__null__' : $text, ENT_COMPAT, 'UTF-8'); }
 
 //Этот параметр приходит из формы и позволяет не включать rowid в запрос, есил запрос сложный,
 //например, с вложенными select
@@ -71,10 +71,10 @@ try
 					return;
 				}
 				$e = mb_strtolower($e);
-		
+
 				$e = (int) ($e == 'rowid' || $e == 'oid' || $e == '_rowid_');
 			});
-			
+
 			if (array_sum($tmp) == 0)
 				array_unshift($fields, 'rowid');
 			$sp[2] = implode(', ', $fields);
@@ -96,7 +96,25 @@ try
 		else
 			$request .= ' ORDER BY '.$orderValue;
 	}
+	//Пришло условие
+	if (isset($_GET['where']))
+	{
+		$condition = preg_replace('#=(.*)$#', "='$1'", rawurldecode($_GET['where']));
 
+		if (preg_match('#\bwhere\b#iu', $request))
+		{
+			$request = preg_replace('#\bwhere\biu#', 'WHERE '.$condition, $request);
+		}
+		else
+		{
+			if (preg_match('#\border\b#iu', $request))
+				$request = preg_replace('#\border\b#iu', 'where '.$condition.' order', $request);
+			elseif (preg_match('#\blimit\b#iu', $request))
+				$request = preg_replace('#\blimit\b#', 'where '.$condition.' limit', $request);
+			else
+				$request .= ' WHERE '.$condition;
+		}
+	}
 
 	$query = $sql->prepare($request);
 	if ($query === false)
@@ -180,6 +198,7 @@ catch (Exception $e)
 		border-collapse: collapse;
 		margin-top: 24px;
 	}
+	table.pointed td { cursor: pointer; } 
 	td, th {
 		border: 1px solid #888;
 		padding: 4px 5px;
@@ -204,7 +223,7 @@ catch (Exception $e)
 	.lightred { color: #fbb; }
 	.violet { color: #7c73cf; }
 	.orange { color: #cb742b; }
-	
+
 	.highlight {
 		color: #fff;
 		text-shadow: 0 0 6px rgba(255, 80, 80, 0.7), 0 0 3px rgba(255, 100, 100, 1);
@@ -212,11 +231,11 @@ catch (Exception $e)
 </style>
 <script>
 	function qs(selector) {
-		const elem = (arguments.length > 1 ? arguments[1] : document);
+		const elem = arguments.length > 1 ? arguments[1] : document;
 		return elem.querySelector(selector);
 	}
 	function qsa(selector) {
-		const elem = (arguments.length > 1 ? arguments[1] : document);
+		const elem = arguments.length > 1 ? arguments[1] : document;
 		return elem.querySelectorAll(selector);
 	}
 	function onEvent(elem, event, callback) {
@@ -224,35 +243,43 @@ catch (Exception $e)
 	}
 
 	const TableName = '<?=$TableName ?>',
-	Rowid = localStorage.getItem('SQLM.Rowid') || false; 
+	Rowid = localStorage.getItem('SQLM.Rowid') || false;
 
 	function ViewTable(name) {
 		location.search = '?q=select * from ' + name + (Rowid ? '&rowid=on' : '');
 	}
+	
+	/* Добавление в location параметра и переход по новому адресу */
+	function modifyLocation(param, value) {
+		let gets = location.search.split('&'),
+		    regexp = new RegExp('\\b' + param + '=', 'i');
+
+		gets = gets.map(gt => {
+			if (!regexp.test(gt)) return gt;
+			return null;		//Обнуялем элоемент, который пришёл в параметрах
+		});
+		gets.push(param + '=' + encodeURIComponent(value));
+		const getLine = gets.reduce((prev, curr) => prev + (curr == null ? '' : '&' + curr), '').replace(/^&/, '');
+
+		location.search = getLine;
+	}
 
 	onEvent(document, 'DOMContentLoaded', () => {
-	
 		qs('[name=rowid]').checked = Rowid == 'true';
 
 		//Щелчок по заголовку столбца для сортировки по нему. Shift — сразу DESC
 		qsa('table th').forEach(el => {
 			onEvent(el, 'click', (ev) => {
 				let gets = location.search.split('&'),
-					elName = el.getAttribute('data-name'),
-					asc = !ev.shiftKey;
+				    elName = el.getAttribute('data-name'),
+				    asc = !ev.shiftKey;
 
-				gets = gets.map(gt => {
-					if (!/^order=/i.test(gt)) return gt;
-					//Если сортировка по этому элементу уже есть, нужно изменить порядок сортировки
-					if (gt.split('=')[1] == encodeURIComponent(elName))
-						asc = false;				//По возрастанию или убыванию
-
-					return null;
+				gets.map(gt => {
+					if (/^\border=/i.test(gt) && gt.split('=')[1] == encodeURIComponent(elName))
+						asc = false;
 				});
-				gets.push('order=' + encodeURIComponent(elName + (!asc ? ' desc' : '')));
-				const getLine = gets.reduce((prev, curr) => prev + (curr == null ? '' : '&' + curr), '').replace(/^&/, '');
 
-				location.search = getLine;
+				modifyLocation('order', encodeURIComponent(elName) + (asc ? '' : ' desc'))
 			});
 		});
 
@@ -282,7 +309,7 @@ catch (Exception $e)
 				bodyRows.forEach(el => {
 					const td = qsa('td', el);
 					const typeValue = td[typeCol].textContent;
-	
+
 					if (typeValue == 'table')
 					{
 						td[typeCol].classList.add('yellow');
@@ -298,7 +325,7 @@ catch (Exception $e)
 						if (nameCol !== null)
 							td[nameCol].classList.add('grey');
 					}
-					
+
 					if (sqlCol !== null)
 					{
 						const tableNameColor = 'blue';
@@ -325,7 +352,7 @@ catch (Exception $e)
 								nameColor = tableNameColor;			//Цвет имени таблицы
 								sqlString = sqlString.replace(CT[0], CT[1] + '<span class="link ' + nameColor + '" data-tablename="">' + CT[2] + '</span>')
 								            .replace(rgShort, '<span class="' + constrColor + '">$1</span>');
-							
+
 								const varColor = 'orange',				//Цвет поля таблицы
 								      typeColor = 'yellow',			//Цвет типа поля
 								      defaultsColor = 'violet';		//Цвет значения DEFAULT
@@ -362,7 +389,7 @@ catch (Exception $e)
 		}
 		else
 		{
-			//В остальных таблицах просто отметим столбец rowid
+			//В остальных таблицах просто отметим столбец rowid и подкрасим null
 			let rowidIndex = null;
 			const headCols = qsa('table th'),
 			      bodyRows = qsa('table tbody tr');
@@ -377,7 +404,45 @@ catch (Exception $e)
 					qsa('td', el)[rowidIndex].classList.add('blue');
 				});
 			}
+
+			qsa('td').forEach(el => {
+				if (el.textContent == '__null__')
+				{
+					el.classList.add('red');
+					el.classList.add('isNull');
+					el.textContent = 'null';
+				}
+			});
+
+			//Щелчок по ячейке с шифтом или контролом делает where на эту ячейку
+			onEvent(qs('table'), 'click', function(ev) {
+				if (ev.target.tagName != 'TD' || !(ev.shiftKey || ev.ctrlKey))
+					return;
+
+				const td = ev.target,
+				      _allTDs = qsa('td', ev.target.parentNode),		//У этого нет reduce, поэтому дальше перекладываем в массив
+				      allTDs = [],
+				      action = ev.shiftKey ? ' = ' : ' != ';			//shift — равно, alt — не равно
+
+				_allTDs.forEach(el => allTDs.push(el));
+				const thisIndex = allTDs.reduce((prev, el, index) => el == td ? index : prev, null);
+
+				if (thisIndex !== null)
+				{
+					const paramName = qsa('thead tr th', this)[thisIndex].getAttribute('data-name');
+				   
+					let value = action + encodeURIComponent(td.textContent);
+					if (/\bisNull\b/.test(td.className))
+						value = ' is null';
+					modifyLocation('where', paramName + value);
+			   }
+			});
 		}
+	});
+
+	onEvent(window, 'keydown', ev => (ev.shiftKey || ev.controlKey) && qs('table').classList.add('pointed'));
+	onEvent(window, 'keyup',   ev => {
+		['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight'].indexOf(ev.code) !== -1 && qs('table').classList.remove('pointed');
 	});
 </script>
 </head>
@@ -395,7 +460,7 @@ else
 	{
 		echo '<div class="tablename">Таблица [ <a href="#" onclick="ViewTable(\''.$TableName.'\')" title="Активная таблица">'.$TableName.'</a> ]</div>';
 	}
-	
+
 	if (!empty($data))
 	{
 		echo '<table><thead><tr>';
