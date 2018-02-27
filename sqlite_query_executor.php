@@ -158,7 +158,7 @@ catch (Exception $e)
 	a {
 		text-decoration: none;
 	}
-	input {
+	input:not([type=checkbox]) {
 		padding: 4px 8px;
 		height: 32px;
 		-webkit-appearance: none;
@@ -350,15 +350,17 @@ catch (Exception $e)
 							{
 								constrColor = 'green';					//Цвет CREATE TABLE
 								nameColor = tableNameColor;			//Цвет имени таблицы
-								sqlString = sqlString.replace(CT[0], CT[1] + '<span class="link ' + nameColor + '" data-tablename="">' + CT[2] + '</span>')
-								            .replace(rgShort, '<span class="' + constrColor + '">$1</span>');
 
 								const varColor = 'orange',				//Цвет поля таблицы
 								      typeColor = 'yellow',			//Цвет типа поля
 								      defaultsColor = 'violet';		//Цвет значения DEFAULT
-								sqlString = sqlString.replace(/((?:\(|,))\s*(.+?)(\s+)(.+?)\b/ig, '$1 <span class="' + varColor + '">$2</span>$3<span class="' + typeColor + '">$4</span>');
+								sqlString = sqlString.replace(/((?:table\s+.+?\s*\(|,))\s*(.+?)(\s+)(.+?)\b/ig, '$1 <span class="' + varColor + '">$2</span>$3<span class="' + typeColor + '">$4</span>');
 								sqlString = sqlString.replace(/(default\s+.+?)\s*(?=,|\))/ig, '<span class="' + defaultsColor + '">$1</span>');
 								sqlString = sqlString.replace(/\s*\)/g, ' )');
+								sqlString = sqlString.replace(/\(\s*/g, '( ');
+									
+								sqlString = sqlString.replace(CT[0], CT[1] + '<span class="link ' + nameColor + '" data-tablename="">' + CT[2] + '</span>')
+										.replace(rgShort, '<span class="' + constrColor + '">$1</span>');
 							}
 						}
 
